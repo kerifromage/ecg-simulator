@@ -3,63 +3,93 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>心电图间期与心率动态模拟器</title>
+    <title>心电图间期与心率动态模拟器 (Bazett 模型)</title>
     <style>
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; color: #333; display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
-        .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 800px; width: 100%; }
-        h1 { font-size: 1.5rem; text-align: center; color: #2c3e50; }
-        .controls { margin: 20px 0; padding: 20px; background: #eef2f5; border-radius: 8px; }
-        .slider-group { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
+        .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 850px; width: 100%; }
+        h1 { font-size: 1.6rem; text-align: center; color: #2c3e50; margin-bottom: 5px; }
+        .subtitle { font-size: 0.95rem; color: #7f8c8d; text-align: center; margin-bottom: 25px; }
+        .controls { padding: 20px; background: #eef2f5; border-radius: 8px; margin-bottom: 20px; }
+        .slider-group { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
         input[type=range] { width: 70%; cursor: pointer; }
-        .metrics { display: flex; justify-content: space-around; margin-top: 20px; text-align: center;}
-        .metric-card { padding: 15px; background: #fff; border: 2px solid #e0e6ed; border-radius: 8px; width: 28%; }
-        .metric-value { font-size: 1.5rem; font-weight: bold; margin-top: 5px; }
-        .metric-value.rr { color: #3498db; }
-        .metric-value.pr { color: #2ecc71; }
-        .metric-value.rt { color: #e74c3c; }
         canvas { background: #fff; border: 1px solid #ccc; border-radius: 4px; width: 100%; height: auto; }
-        .legend { display: flex; justify-content: center; gap: 20px; margin-top: 10px; font-size: 0.9rem; }
+        .legend { display: flex; justify-content: center; gap: 20px; margin-top: 15px; font-size: 0.9rem; }
         .legend-item { display: flex; align-items: center; gap: 5px; }
         .color-box { width: 15px; height: 15px; border-radius: 3px; }
+        
+        /* 指标卡片网格 */
+        .metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 15px; margin-top: 25px; }
+        .metric-card { padding: 15px 10px; background: #fff; border: 2px solid #e0e6ed; border-radius: 8px; text-align: center; position: relative; }
+        .metric-title { font-size: 0.85rem; color: #555; margin-bottom: 5px; }
+        .metric-value { font-size: 1.4rem; font-weight: bold; }
+        .metric-value.rr { color: #34495e; }
+        .metric-value.pr { color: #2ecc71; }
+        .metric-value.qt { color: #e74c3c; }
+        .metric-value.rt { color: #9b59b6; }
+        .experiment-tag { font-size: 0.7rem; color: #e67e22; margin-top: 5px; line-height: 1.2; display: block; }
+        
+        /* 科普板块 */
+        .info-box { margin-top: 30px; padding: 20px; background: #fdfaf6; border-left: 5px solid #f39c12; border-radius: 4px; }
+        .info-title { font-size: 1.1rem; font-weight: bold; color: #d35400; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+        .info-text { font-size: 0.95rem; color: #444; line-height: 1.6; }
+        .formula-block { background: #fff; padding: 10px; border: 1px dashed #d35400; text-align: center; font-family: monospace; font-size: 1.1rem; margin: 10px 0; border-radius: 4px; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>🫀 心电图间期 (PR & RT) 与心率动态模拟</h1>
+    <h1>🫀 心电图间期与心率动态关系</h1>
+    <div class="subtitle">探索心跳快慢如何“压缩”你的生理周期</div>
     
     <div class="controls">
         <div class="slider-group">
-            <label for="bpmSlider"><strong>心率 (BPM):</strong></label>
+            <label for="bpmSlider"><strong>调整心率 (BPM):</strong></label>
             <input type="range" id="bpmSlider" min="40" max="150" value="80">
-            <span id="bpmValue" style="font-weight: bold; font-size: 1.2rem; width: 60px;">80</span>
-        </div>
-        <div style="font-size: 0.85rem; color: #7f8c8d; text-align: center;">
-            提示：滑动滑块观察随着心跳加快，各个生理间期是如何被“压缩”的。
+            <span id="bpmValue" style="font-weight: bold; font-size: 1.3rem; width: 60px; text-align: right;">80</span>
         </div>
     </div>
 
-    <canvas id="ecgCanvas" width="800" height="300"></canvas>
+    <canvas id="ecgCanvas" width="850" height="320"></canvas>
     
     <div class="legend">
-        <div class="legend-item"><div class="color-box" style="background: rgba(46, 204, 113, 0.3);"></div> PR 间期</div>
-        <div class="legend-item"><div class="color-box" style="background: rgba(231, 76, 60, 0.3);"></div> RT 间期 (R峰到T峰)</div>
+        <div class="legend-item"><div class="color-box" style="background: rgba(46, 204, 113, 0.25);"></div> 临床 PR 间期</div>
+        <div class="legend-item"><div class="color-box" style="background: rgba(231, 76, 60, 0.25);"></div> 临床 QT 间期</div>
     </div>
 
-    <div class="metrics">
+    <div class="metrics-grid">
         <div class="metric-card">
-            <div style="font-size: 0.9rem; color: #555;">RR 周期</div>
+            <div class="metric-title">RR 周期 (脉搏间隔)</div>
             <div class="metric-value rr" id="rrValue">750 ms</div>
         </div>
         <div class="metric-card">
-            <div style="font-size: 0.9rem; color: #555;">PR 间期</div>
-            <div class="metric-value pr" id="prValue">140 ms</div>
+            <div class="metric-title">医学 PR 间期</div>
+            <div class="metric-value pr" id="prValue">150 ms</div>
         </div>
         <div class="metric-card">
-            <div style="font-size: 0.9rem; color: #555;">RT 间期</div>
+            <div class="metric-title">医学 QT 间期</div>
+            <div class="metric-value qt" id="qtValue">346 ms</div>
+        </div>
+        <div class="metric-card" style="border-color: #f39c12; background: #fffaf0;">
+            <div class="metric-title">工程 RT 间距</div>
             <div class="metric-value rt" id="rtValue">240 ms</div>
+            <span class="experiment-tag">*根据您的实验峰值截断法生成，随心率联动，非医学标准。</span>
         </div>
     </div>
+
+    <div class="info-box">
+        <div class="info-title">💡 科普时间：什么是 Bazett 模型？</div>
+        <div class="info-text">
+            在心电生理学中，每次心跳后心脏都需要“重置”（复极化），这个过程的时间长度用 <strong>QT 间期</strong> 表示。但问题是：<strong>心跳越快，心脏给自己的重置时间就越短</strong>。<br><br>
+            为了在不同心率下统一评估心脏健康，1920 年生理学家 Henry Bazett 提出了著名的 <strong>Bazett 校正公式</strong>。他发现，将实际测量的 QT 时长除以心动周期 (RR) 的平方根，就能得到一个心率在 60 BPM 时的“标准等效 QT”（即 QTc）。
+            
+            <div class="formula-block">
+                QTc = QT / &radic;RR &nbsp;&nbsp;&nbsp;&rArr;&nbsp;&nbsp;&nbsp; 理论 QT = QTc &times; &radic;RR
+            </div>
+            
+            本模拟器正是应用了这个公式（假设健康人的基准 QTc 为 400ms），当你滑动上方心率时，模拟器底层的数学模型会自动使用该公式“压缩”或“拉长”红色的 QT 阴影区，完美还原真实的生理现象！
+        </div>
+    </div>
+
 </div>
 
 <script>
@@ -71,38 +101,53 @@
     const bpmVal = document.getElementById('bpmValue');
     const rrVal = document.getElementById('rrValue');
     const prVal = document.getElementById('prValue');
+    const qtVal = document.getElementById('qtValue');
     const rtVal = document.getElementById('rtValue');
 
     function drawECG(bpm) {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         
-        // 1. 核心数学模型：动态间期计算
+        // 1. 数学模型计算
         const rr = 60 / bpm; // RR 间期(秒)
         
-        // 使用非线性模型模拟间期随心率的变化
-        const rt = 0.240 * Math.pow(rr / 0.75, 0.4); 
-        const pr = 0.140 * Math.pow(rr / 0.75, 0.2); 
+        // 【医学模型】Bazett 公式应用
+        const qtc = 0.400; // 假设标准校正 QTc 为 400ms
+        const qt = qtc * Math.sqrt(rr); // 真实的医学 QT
         
-        // 更新页面数值显示
+        // PR 间期模拟 (随心率轻微变化，正常 120-200ms)
+        const pr = 0.160 * Math.pow(rr / 0.75, 0.2); 
+        
+        // 【工程实验模型】模拟你的 RT 截断数据 (80BPM时约240ms)
+        const rt_experiment = 0.240 * Math.pow(rr / 0.75, 0.4); 
+        
+        // 更新页面数值
         bpmVal.innerText = bpm;
         rrVal.innerText = (rr * 1000).toFixed(0) + ' ms';
         prVal.innerText = (pr * 1000).toFixed(0) + ' ms';
-        rtVal.innerText = (rt * 1000).toFixed(0) + ' ms';
+        qtVal.innerText = (qt * 1000).toFixed(0) + ' ms';
+        rtVal.innerText = (rt_experiment * 1000).toFixed(0) + ' ms';
 
         // 2. 绘图参数
         const baseline = canvas.height * 0.65;
-        const scaleX = canvas.width / (rr * 1.6); 
-        const rPeakTime = 0.2; 
+        const scaleX = canvas.width / (rr * 1.8); // 稍微多显示一点周期
         
-        const pPeakTime = rPeakTime - pr;
-        const tPeakTime = rPeakTime + rt;
+        // 定义波形起点
+        const qStart = 0.2; // Q波起点设为基准点
+        const pStart = qStart - pr; // PR间期是P起点到Q起点
+        const tEnd = qStart + qt;   // QT间期是Q起点到T终点
 
-        // 3. 绘制间期阴影
-        ctx.fillStyle = "rgba(46, 204, 113, 0.25)";
-        ctx.fillRect(pPeakTime * scaleX, 0, pr * scaleX, canvas.height);
+        // R波和T波顶点的相对位置（用于画波形）
+        const rPeak = qStart + 0.02; // R波最高点在Q波之后极短时间
+        const tPeak = tEnd - 0.06;   // T波最高点在终点前
+
+        // 3. 绘制间期阴影 (严格按医学定义)
+        // PR 阴影 (绿)：从 P起点 到 Q起点
+        ctx.fillStyle = "rgba(46, 204, 113, 0.20)";
+        ctx.fillRect(pStart * scaleX, 0, pr * scaleX, canvas.height);
         
-        ctx.fillStyle = "rgba(231, 76, 60, 0.25)";
-        ctx.fillRect(rPeakTime * scaleX, 0, rt * scaleX, canvas.height);
+        // QT 阴影 (红)：从 Q起点 到 T终点
+        ctx.fillStyle = "rgba(231, 76, 60, 0.20)";
+        ctx.fillRect(qStart * scaleX, 0, qt * scaleX, canvas.height);
 
         // 4. 绘制 ECG 波形
         ctx.beginPath();
@@ -110,27 +155,29 @@
         ctx.lineWidth = 2.5;
         ctx.lineJoin = 'round';
         
-        // 【核心修复】：将采样步长从 0.002 改为 0.001，避免在心率慢时错过尖锐的 R 峰顶点
-        for (let t = 0; t < rr * 1.6; t += 0.001) {
+        // 缩小步长为 0.001，避免 R 峰平顶
+        for (let t = 0; t < rr * 1.8; t += 0.001) {
             let y = 0;
             let local_t = t % rr;
             
-            // P波
-            y += 0.12 * Math.exp(-Math.pow((local_t - pPeakTime) / 0.02, 2));
+            // P波 (高斯)
+            y += 0.12 * Math.exp(-Math.pow((local_t - (pStart + 0.04)) / 0.02, 2));
             
             // QRS波群
-            if (local_t > rPeakTime - 0.04 && local_t < rPeakTime + 0.05) {
-                // 稍微收窄了 R 峰的计算宽度，让它看起来更锐利
-                y -= 0.15 * Math.exp(-Math.pow((local_t - (rPeakTime - 0.015)) / 0.008, 2));
-                y += 1.4 * Math.exp(-Math.pow((local_t - rPeakTime) / 0.005, 2));
-                y -= 0.25 * Math.exp(-Math.pow((local_t - (rPeakTime + 0.018)) / 0.009, 2));
+            if (local_t > qStart - 0.02 && local_t < qStart + 0.06) {
+                // Q波 (向下)
+                y -= 0.15 * Math.exp(-Math.pow((local_t - qStart) / 0.005, 2));
+                // R波 (极尖锐向上)
+                y += 1.4 * Math.exp(-Math.pow((local_t - rPeak) / 0.004, 2));
+                // S波 (向下)
+                y -= 0.25 * Math.exp(-Math.pow((local_t - (rPeak + 0.015)) / 0.006, 2));
             }
             
-            // T波
-            y += 0.3 * Math.exp(-Math.pow((local_t - tPeakTime) / 0.04, 2));
+            // T波 (较宽的高斯)
+            y += 0.3 * Math.exp(-Math.pow((local_t - tPeak) / 0.04, 2));
 
             const canvasX = t * scaleX;
-            const canvasY = baseline - y * 120; 
+            const canvasY = baseline - y * 130; 
             
             if (t === 0) ctx.moveTo(canvasX, canvasY);
             else ctx.lineTo(canvasX, canvasY);
@@ -142,6 +189,7 @@
         drawECG(e.target.value);
     });
 
+    // 初始渲染
     window.onload = () => { drawECG(bpmSlider.value); };
 </script>
 </body>
