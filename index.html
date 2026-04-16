@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>心电图间期与心率动态关系模拟器</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; color: #333; display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
+        .container { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); max-width: 800px; width: 100%; }
+        h1 { font-size: 1.5rem; text-align: center; color: #2c3e50; }
+        .controls { margin: 20px 0; padding: 20px; background: #eef2f5; border-radius: 8px; }
+        .slider-group { display: flex; align-items: center; justify-content: space-between; margin-bottom: 15px; }
+        input[type=range] { width: 70%; cursor: pointer; }
+        .metrics { display: flex; justify-content: space-around; margin-top: 20px; }
+        .metric-card { text-align: center; padding: 15px; background: #fff; border: 2px solid #e0e6ed; border-radius: 8px; width: 30%; }
+        .metric-value { font-size: 1.5rem; font-weight: bold; color: #3498db; margin-top: 5px; }
+        .metric-value.qt { color: #e74c3c; }
+        .metric-value.pr { color: #2ecc71; }
+        canvas { background: url('https://www.transparenttextures.com/patterns/graphy.png') #fff; border: 1px solid #ccc; border-radius: 4px; width: 100%; height: auto; }
+        .formula { font-size: 0.9rem; color: #7f8c8d; text-align: center; margin-top: 10px; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>🫀 心电图间期与心率动态关系模拟器</h1>
+    
+    <div class="controls">
+        <div class="slider-group">
+            <label for="bpmSlider"><strong>心率 (BPM):</strong></label>
+            <input type="range" id="bpmSlider" min="40" max="150" value="80">
+            <span id="bpmValue" style="font-weight: bold; font-size: 1.2rem; width: 50px;">80</span>
+        </div>
+        <div class="formula">
+            临床 Bazett 校正公式：QTc = QT / &radic;RR (本模拟器假设标准 QTc 为 400ms)
+        </div>
+    </div>
+
+    <canvas id="ecgCanvas" width="800" height="300"></canvas>
+
+    <div class="metrics">
+        <div class="metric-card">
+            <div>RR 间期 (周期)</div>
+            <div class="metric-value" id="rrValue">750 ms</div>
+        </div>
+        <div class="metric-card">
+            <div>PR 间期</div>
+            <div class="metric-value pr" id="prValue">138 ms</div>
+        </div>
+        <div class="metric-card">
+            <div>QT 间期 (未校正)</div>
+            <div class="metric-value qt" id="qtValue">346 ms</div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const canvas = document.getElementById('ecgCanvas');
+    const ctx = canvas.getContext('2d');
+    const bpmSlider = document.getElementById('bpmSlider');
+    
+    const bpmVal = document.getElementById('bpmValue');
+    const rrVal = document.getElementById('rrValue');
+    const prVal = document.getElementById('prValue');
+    const qtVal = document.getElementById('qtValue');
+
+    // 绘制单个心跳的函数
+    function drawECG(bpm) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        
+        // 数学计算
+        const rr = 60 / bpm; // RR间期 (秒)
+        const qtc = 0.400; // 假设标准 QTc 为 400ms
+        const qt = qtc * Math.sqrt(rr); // 动态计算真实的 QT
+        const pr = 0.16 * Math.sqrt(rr); // 粗略模拟 PR 随心率的微小缩短
+        
+        // 更新 UI 数字
+        bpmVal.innerText = bpm;
+        rrVal.innerText = (rr * 1000).toFixed(0) + ' ms';
+        prVal.innerText = (pr * 1000).toFixed(0) + ' ms';
+        qtVal.innerText = (qt * 1000).toFixed(0) + ' ms';
+
+        // 绘图参数设置
+        const baseline = canvas.height * 0.6;
+        const scaleX = canvas.width / (rr * 1.5); // 让一个半周期填满画布
+        const rPeakTime = 0.2; // R波固定在0.2秒处
+        
+        const pStart = rPeakTime - pr;
+        const tEnd = rPeakTime + qt;
+
+        // 绘制 PR 阴影区 (浅绿色)
+        ctx.fillStyle = "rgba(46, 204, 113, 0.2)";
+        ctx.fillRect(pStart * scaleX, 0, pr * scaleX, canvas.height);
+        
+        // 绘制 QT 阴影区 (浅红色)
+        ctx.fillStyle = "rgba(231, 76, 60, 0.2)";
+        ctx.fillRect(rPeakTime * scaleX, 0, qt * scaleX, canvas.height);
+
+        // 绘制心电图线
+        ctx.beginPath();
+        ctx.strokeStyle = "#2c3e50";
+        ctx.lineWidth = 2.5;
+        
+        for (let t = 0; t < rr * 1.5; t += 0.002) {
+            let y = 0;
+            
+            // P波 (高斯函数模拟)
+            y += 0.15 * Math.exp(-Math.pow((t - (rPeakTime - pr + 0.04)) / 0.015, 2));
+            // QRS波
+            if (t > rPeakTime - 0.02 && t < rPeakTime + 0.03) {
+                if (t < rPeakTime - 0.01) y -= 0.1; // Q
+                else if (t < rPeakTime + 0.01) y += 1.2; // R
+                else y -= 0.2; // S
+            }
+            // T波 (高斯函数模拟)
+            y += 0.25 * Math.exp(-Math.pow((t - (tEnd - 0.08)) / 0.03, 2));
+
+            const canvasX = t * scaleX;
+            const canvasY = baseline - y * 100;
+            
+            if (t === 0) ctx.moveTo(canvasX, canvasY);
+            else ctx.lineTo(canvasX, canvasY);
+        }
+        ctx.stroke();
+    }
+
+    // 监听滑块变化
+    bpmSlider.addEventListener('input', (e) => {
+        drawECG(e.target.value);
+    });
+
+    // 初始绘制
+    drawECG(bpmSlider.value);
+</script>
+
+</body>
+</html>
